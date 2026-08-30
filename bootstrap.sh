@@ -19,6 +19,7 @@ if ! grep -qi microsoft /proc/version 2>/dev/null; then
   echo "    running under WSL. Continuing anyway, but the Windows-side steps"
   echo "    (WezTerm, /etc/wsl.conf) will no-op."
 fi
+# shellcheck disable=SC1091  # /etc/os-release is a host file, not repo source
 echo "    $(. /etc/os-release && echo "$PRETTY_NAME") on $(uname -m)"
 
 echo "==> Step 1: Determinate Nix"
@@ -83,7 +84,40 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 # <name>.backup rather than failing the switch.
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
-echo "==> Step 6: make zsh the login shell"
+echo "==> Step 6: herdr agent integrations"
+# herdr shows which agent is live in which pane by way of a small hook it
+# installs inside each agent's own config. Those hooks are generated files that
+# herdr owns - the one it writes says so at the top, and updating herdr
+# overwrites it - so this repo ships no copy of them. It asks herdr to write its
+# own instead, which also keeps the absolute paths inside them right for
+# whatever machine this is.
+HERDR_BIN="$HOME/.nix-profile/bin/herdr"
+if [ ! -x "$HERDR_BIN" ]; then
+  echo "    herdr not found at $HERDR_BIN, skipping (did step 5 succeed?)"
+else
+  # command name -> herdr integration target, for the agents home.nix configures.
+  # Only agents you actually have get one: installing an integration for an
+  # absent agent builds a config tree for a tool that will never run.
+  for pair in claude:claude codex:codex opencode:opencode pi:pi gemini:antigravity-cli; do
+    agent_cmd=${pair%%:*}
+    herdr_target=${pair##*:}
+    if ! command -v "$agent_cmd" >/dev/null 2>&1; then
+      echo "    $agent_cmd is not installed, skipping its integration"
+    elif herdr_out=$("$HERDR_BIN" integration install "$herdr_target" 2>&1); then
+      echo "    $agent_cmd: integration installed"
+    else
+      # Never fatal. herdr still works; it just cannot show that agent's state.
+      echo "    $agent_cmd: herdr could not install its integration, continuing"
+      printf '%s\n' "$herdr_out" | sed 's/^/      /'
+    fi
+  done
+  # Claude reads its hook registration from ~/.claude/settings.json, which is
+  # this repo's file through the symlink in home.nix. So the "hooks" block there
+  # is herdr's output, not hand-written config: expect it to change when herdr
+  # updates its integration, and let herdr be the one to rewrite it.
+fi
+
+echo "==> Step 7: make zsh the login shell"
 ZSH_BIN="$HOME/.nix-profile/bin/zsh"
 if [ ! -x "$ZSH_BIN" ]; then
   echo "    $ZSH_BIN not found, skipping (did step 5 succeed?)"

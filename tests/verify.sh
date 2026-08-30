@@ -87,6 +87,27 @@ else
   skip "claude is not on PATH" "expected if you have not installed it here"
 fi
 
+# herdr can only report an agent's state if that agent's integration hook is
+# installed, which bootstrap step 6 does. Ask herdr instead of looking for files:
+# it owns those paths and they differ per agent.
+if command -v herdr >/dev/null 2>&1; then
+  herdr_status=$(herdr integration status 2>/dev/null || true)
+  for pair in claude:claude codex:codex opencode:opencode pi:pi gemini:antigravity-cli; do
+    agent_cmd=${pair%%:*}
+    herdr_target=${pair##*:}
+    command -v "$agent_cmd" >/dev/null 2>&1 || continue
+    case "$(printf '%s\n' "$herdr_status" | sed -n "s/^${herdr_target}: //p")" in
+      "")               skip "herdr reports no integration for $agent_cmd" \
+                             "this herdr version may not know that agent" ;;
+      "not installed"*) bad  "herdr's $agent_cmd integration is not installed" \
+                             "run ./bootstrap.sh; herdr cannot track $agent_cmd panes without it" ;;
+      current*)         ok   "herdr's $agent_cmd integration is installed and current" ;;
+      *)                skip "herdr's $agent_cmd integration is out of date" \
+                             "re-run ./bootstrap.sh to refresh it" ;;
+    esac
+  done
+fi
+
 # ---------------------------------------------------------------------------
 section "3. Edit-in-place symlinks"
 
@@ -112,7 +133,7 @@ section "4. Shell"
 login_shell=$(getent passwd "$(id -un)" | cut -d: -f7)
 case "$login_shell" in
   *zsh) ok "login shell is zsh ($login_shell)" ;;
-  *) skip "login shell is $login_shell" "bootstrap step 6 offers to change this" ;;
+  *) skip "login shell is $login_shell" "bootstrap step 7 offers to change this" ;;
 esac
 
 if [ -L "$HOME/.zshrc" ] && [ -e "$HOME/.zshrc" ]; then

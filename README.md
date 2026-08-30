@@ -42,7 +42,7 @@ Before you run it: review [Make it yours](#make-it-yours).
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` does six things, in order:
+`bootstrap.sh` does seven things, in order:
 
 1. Installs Determinate Nix, if it isn't already installed.
 2. Symlinks this repo to `~/.dotfiles`.
@@ -54,7 +54,11 @@ Before you run it: review [Make it yours](#make-it-yours).
    offers to install it with sudo. Nothing is written without your yes.
 5. Runs the first `home-manager switch`, fetching `home-manager` itself from the
    release-26.05 branch. The config it applies is pinned by this repo's `flake.lock`.
-6. Offers to make the Nix zsh your login shell (adding it to `/etc/shells` first,
+6. Asks herdr to install its agent integrations, for each agent you actually
+   have. These are generated hooks that herdr owns and overwrites on update, so
+   this repo does not ship them; herdr writes its own, with paths correct for
+   this machine.
+7. Offers to make the Nix zsh your login shell (adding it to `/etc/shells` first,
    since `chsh` refuses shells that aren't listed).
 
 Two steps stay manual, because they run on the Windows side:
@@ -116,7 +120,7 @@ environment, unlike the video's `darwin-rebuild`, which writes system state.
 | `macos_window_background_blur = 50` | `win32_system_backdrop = "Acrylic"` | The Windows equivalent. Both are guarded by a platform check in the same `wezterm.lua`. |
 | Hack Nerd Font via `home.packages` | that, plus `scripts/install-nerd-font.ps1` | The Linux copy is invisible to a Windows terminal; it needs its own per-user install. |
 | his `~/.pi/agent` layer (Pi themes, extensions, models.json, settings.json) | **not ported** | See [Not ported](#not-ported). |
-| `chsh` not needed (zsh is the macOS default) | bootstrap step 6 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
+| `chsh` not needed (zsh is the macOS default) | bootstrap step 7 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
 
 The Neovim config carries over untouched: it already checks for WSL and turns on
 a transparent background there, so it was correct for this machine before the
