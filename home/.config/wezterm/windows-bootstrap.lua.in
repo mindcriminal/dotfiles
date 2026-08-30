@@ -1,0 +1,36 @@
+-- GENERATED - do not edit on the Windows side.
+--
+-- Source template: home/.config/wezterm/windows-bootstrap.lua.in
+-- Regenerate with: ./rebuild.sh   (or scripts/install-windows-wezterm.sh)
+--
+-- WezTerm runs as a Windows program, so Home Manager cannot symlink its config
+-- the way it does for everything else: Windows will not follow a Linux symlink.
+-- Instead this tiny loader is copied to the Windows side and reads the real
+-- config out of WSL over the \\wsl.localhost share, which keeps the
+-- edit-in-place model intact - change the .lua in the repo, hit Ctrl+Shift+R,
+-- no rebuild needed.
+
+local wezterm = require("wezterm")
+
+local WSL_CONFIG = [[@WSL_CONFIG_UNC@]]
+
+local ok, result = pcall(dofile, WSL_CONFIG)
+
+if ok and type(result) == "table" then
+	return result
+end
+
+-- Fallback: WSL is not reachable (distro stopped and failed to auto-start, the
+-- repo moved, or the share is unavailable). Return a usable terminal rather
+-- than letting WezTerm fall all the way back to its stock defaults, and say why.
+wezterm.log_error("wezterm: could not load WSL config at " .. WSL_CONFIG .. ": " .. tostring(result))
+
+local config = wezterm.config_builder()
+config.color_scheme = "rose-pine-moon"
+config.font = wezterm.font("Hack Nerd Font")
+config.font_size = 12.0
+config.hide_tab_bar_if_only_one_tab = true
+config.default_domain = "WSL:@WSL_DISTRO@"
+config.win32_system_backdrop = 'Acrylic'
+config.window_background_opacity = 0.88
+return config
