@@ -19,6 +19,8 @@ Running the switch builds:
 - Terminal (WezTerm config with the rose-pine moon theme and dimmed unfocused
   windows, installed across the WSL/Windows boundary)
 - Agent configs (Claude, Codex, opencode all share one AGENTS.md)
+- Agent tooling, by way of firstmate, which owns the list of tools rather than
+  this repo (see [Agent tooling](#agent-tooling))
 - Host settings for WSL itself (`/etc/wsl.conf`), applied only after you see the diff
 
 ## Prerequisites
@@ -42,7 +44,7 @@ Before you run it: review [Make it yours](#make-it-yours).
 ./bootstrap.sh
 ```
 
-`bootstrap.sh` does seven things, in order:
+`bootstrap.sh` does eight things, in order:
 
 1. Installs Determinate Nix, if it isn't already installed.
 2. Symlinks this repo to `~/.dotfiles`.
@@ -54,11 +56,17 @@ Before you run it: review [Make it yours](#make-it-yours).
    offers to install it with sudo. Nothing is written without your yes.
 5. Runs the first `home-manager switch`, fetching `home-manager` itself from the
    release-26.05 branch. The config it applies is pinned by this repo's `flake.lock`.
-6. Asks herdr to install its agent integrations, for each agent you actually
+6. Clones [firstmate](https://github.com/kunchenguid/firstmate), then asks it
+   which agent tools this machine is missing and lets it install them. This repo
+   lists none of those tools by name: firstmate already owns that list and their
+   minimum versions in its own `bin/fm-bootstrap.sh`, so a copy here would rot
+   the first time it changes. Nothing is fetched without your yes, and an
+   existing firstmate checkout is left exactly as it is - never pulled or reset.
+7. Asks herdr to install its agent integrations, for each agent you actually
    have. These are generated hooks that herdr owns and overwrites on update, so
    this repo does not ship them; herdr writes its own, with paths correct for
    this machine.
-7. Offers to make the Nix zsh your login shell (adding it to `/etc/shells` first,
+8. Offers to make the Nix zsh your login shell (adding it to `/etc/shells` first,
    since `chsh` refuses shells that aren't listed).
 
 Two steps stay manual, because they run on the Windows side:
@@ -120,7 +128,7 @@ environment, unlike the video's `darwin-rebuild`, which writes system state.
 | `macos_window_background_blur = 50` | `win32_system_backdrop = "Acrylic"` | The Windows equivalent. Both are guarded by a platform check in the same `wezterm.lua`. |
 | Hack Nerd Font via `home.packages` | that, plus `scripts/install-nerd-font.ps1` | The Linux copy is invisible to a Windows terminal; it needs its own per-user install. |
 | his `~/.pi/agent` layer (Pi themes, extensions, models.json, settings.json) | **not ported** | See [Not ported](#not-ported). |
-| `chsh` not needed (zsh is the macOS default) | bootstrap step 7 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
+| `chsh` not needed (zsh is the macOS default) | bootstrap step 8 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
 
 The Neovim config carries over untouched: it already checks for WSL and turns on
 a transparent background there, so it was correct for this machine before the
@@ -240,6 +248,41 @@ Claude Code on Linux is a self-updating native install under
 copy would land earlier on `PATH`, pin an older build, and fight the updater.
 The video installs it from a Homebrew cask, where that conflict doesn't arise.
 Install or update it upstream's way and leave it out of `home.packages`.
+
+### Agent tooling
+
+The agent CLIs this machine uses (`treehouse`, `no-mistakes`, and a handful of
+`*-axi` npm globals) are **not** declared here, and deliberately so. They
+self-update, they register their own agent hooks, and
+[firstmate](https://github.com/kunchenguid/firstmate) already owns both the list
+of them and their minimum versions, in its `bin/fm-bootstrap.sh`. Listing them
+here would mean two lists, and the second one rots the first time firstmate adds
+a tool or raises a floor.
+
+So bootstrap step 6 does the smallest thing that works: clone firstmate over
+HTTPS (no SSH key exists yet on a fresh machine), ask it what is missing with
+
+```sh
+FM_BOOTSTRAP_DETECT_ONLY=1 <firstmate>/bin/fm-bootstrap.sh
+```
+
+and hand exactly those names back to `fm-bootstrap.sh install`. The detect-only
+flag matters: without it that same command runs firstmate's mutating startup
+sweeps, which a machine bootstrap has no business triggering. Tools that report
+as `MISSING_MANUAL:` are printed for you and never installed, because that call
+fails by design.
+
+The clone destination defaults to `~/github/mindcriminal/firstmate` and is
+overridable with `FIRSTMATE_DIR`; the source with `FIRSTMATE_URL`. An existing
+checkout is never pulled, reset or cleaned - it holds machine-local private
+state that this repo has no business touching, and a fresh clone starting empty
+is the correct outcome on a new machine.
+
+Five of those tools install with `npm install -g`, which is why `home.nix`
+declares `~/.npmrc` with npm's global prefix. Without it npm's prefix is the
+read-only Nix store copy of nodejs, every one of those installs fails, and the
+`~/.npm-global/bin` entry that `home.nix` puts on `PATH` points at a directory
+npm never uses.
 
 ## Repo tour
 

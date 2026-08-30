@@ -88,7 +88,7 @@ else
 fi
 
 # herdr can only report an agent's state if that agent's integration hook is
-# installed, which bootstrap step 6 does. Ask herdr instead of looking for files:
+# installed, which bootstrap step 7 does. Ask herdr instead of looking for files:
 # it owns those paths and they differ per agent.
 if command -v herdr >/dev/null 2>&1; then
   herdr_status=$(herdr integration status 2>/dev/null || true)
@@ -128,12 +128,78 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "4. Shell"
+section "4. firstmate and the agent tooling it owns"
+
+# bootstrap step 6 clones firstmate and asks it to install its own tooling. This
+# repo never lists those tools, so the only honest check is to ask firstmate
+# whether anything is still missing.
+FIRSTMATE_DIR="${FIRSTMATE_DIR:-$HOME/github/mindcriminal/firstmate}"
+FM_BOOTSTRAP="$FIRSTMATE_DIR/bin/fm-bootstrap.sh"
+
+# npm's prefix has to be the directory that is on PATH, or `npm install -g`
+# writes into the read-only Nix store and five of those tools never appear.
+if command -v npm >/dev/null 2>&1; then
+  npm_prefix=$(npm config get prefix 2>/dev/null | tr -d '\r')
+  if [ "$npm_prefix" = "$HOME/.npm-global" ]; then
+    ok "npm's global prefix is $npm_prefix"
+  else
+    bad "npm's global prefix is ${npm_prefix:-unreadable}" \
+        "expected $HOME/.npm-global, the directory home.nix puts on PATH"
+  fi
+  case ":$PATH:" in
+    *":$HOME/.npm-global/bin:"*) ok "\$HOME/.npm-global/bin is on PATH" ;;
+    *) bad "\$HOME/.npm-global/bin is not on PATH" "npm globals would be installed but unreachable" ;;
+  esac
+else
+  skip "npm is not on PATH" "cannot check the global prefix"
+fi
+
+if [ -L "$HOME/.npmrc" ]; then
+  ok ".npmrc is managed by Home Manager"
+elif [ -f "$HOME/.npmrc" ] && grep -q "^prefix=$HOME/.npm-global\$" "$HOME/.npmrc"; then
+  # Right answer, wrong owner: this is the hand-written file home.nix now
+  # declares. It only becomes a symlink on the next switch.
+  skip ".npmrc is still the hand-written file" "run ./rebuild.sh to let Home Manager own it"
+else
+  bad ".npmrc does not set the npm prefix" "expected prefix=$HOME/.npm-global"
+fi
+
+if [ ! -x "$FM_BOOTSTRAP" ]; then
+  bad "firstmate is not installed at $FIRSTMATE_DIR" \
+      "run ./bootstrap.sh; without it this machine has no agent tooling"
+else
+  ok "firstmate is cloned ($FIRSTMATE_DIR)"
+
+  # Read-only on both axes: DETECT_ONLY skips firstmate's mutating sweeps, and
+  # NETWORK=skip keeps this check local and fast. Anything else would make a
+  # verification script change the machine it is verifying.
+  fm_report=$(FM_BOOTSTRAP_DETECT_ONLY=1 FM_BOOTSTRAP_NETWORK=skip "$FM_BOOTSTRAP" 2>&1) \
+    || fm_report="__FAILED__"
+  if [ "$fm_report" = "__FAILED__" ]; then
+    skip "firstmate's detect run did not complete" "cannot tell what tooling is missing"
+  else
+    fm_missing=$(printf '%s\n' "$fm_report" | sed -nE 's/^MISSING: ([^[:space:]]+).*/\1/p')
+    fm_manual=$(printf '%s\n' "$fm_report" | sed -n 's/^MISSING_MANUAL: //p')
+    if [ -z "$fm_missing" ]; then
+      ok "firstmate reports all of its agent tooling installed"
+    else
+      bad "firstmate reports missing tooling: $(printf '%s' "$fm_missing" | tr '\n' ' ')" \
+          "re-run ./bootstrap.sh"
+    fi
+    if [ -n "$fm_manual" ]; then
+      skip "firstmate wants tooling that has no unattended install" \
+           "$(printf '%s' "$fm_manual" | tr '\n' ' ')"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+section "5. Shell"
 
 login_shell=$(getent passwd "$(id -un)" | cut -d: -f7)
 case "$login_shell" in
   *zsh) ok "login shell is zsh ($login_shell)" ;;
-  *) skip "login shell is $login_shell" "bootstrap step 7 offers to change this" ;;
+  *) skip "login shell is $login_shell" "bootstrap step 8 offers to change this" ;;
 esac
 
 if [ -L "$HOME/.zshrc" ] && [ -e "$HOME/.zshrc" ]; then
@@ -173,7 +239,7 @@ if command -v zsh >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-section "5. Neovim"
+section "6. Neovim"
 
 if command -v nvim >/dev/null 2>&1; then
   # lazy.nvim prints plugin-install progress to stdout on first launch, which
@@ -209,7 +275,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-section "6. Font, Linux side"
+section "7. Font, Linux side"
 
 if command -v fc-list >/dev/null 2>&1; then
   # Capture first, then match. Under `set -o pipefail`, `fc-list | grep -q`
@@ -225,7 +291,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "7. Windows side"
+section "8. Windows side"
 
 if ! command -v wslpath >/dev/null 2>&1 || [ ! -x /mnt/c/Windows/System32/cmd.exe ]; then
   skip "Windows is not reachable from here" "nothing below can be checked"
@@ -299,7 +365,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "8. /etc/wsl.conf"
+section "9. /etc/wsl.conf"
 
 if [ ! -f /etc/wsl.conf ]; then
   skip "/etc/wsl.conf does not exist"

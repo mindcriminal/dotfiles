@@ -40,6 +40,16 @@ Deliberate decisions - do NOT silently revert them:
   script now refuses to let two files claim one name. `tests/verify.sh` asks
   Windows whether a Regular face resolves, because files-on-disk passes even
   when this is broken.
+- **The agent tools are firstmate's list, not this repo's.** `bootstrap.sh`
+  step 6 clones firstmate and asks `bin/fm-bootstrap.sh` what is missing, then
+  installs exactly what it names. Do not add `treehouse`, `no-mistakes` or the
+  `*-axi` npm globals to `home.packages` or to any list here: firstmate owns
+  both the roster and the version floors, and a second copy rots. The detect run
+  must keep `FM_BOOTSTRAP_DETECT_ONLY=1`, or it performs firstmate's mutating
+  startup sweeps. See the README's "Agent tooling" section for the rest.
+- **`home.nix` declares `~/.npmrc`.** Five of those tools are `npm install -g`,
+  and without a declared prefix npm writes into the read-only Nix store. This
+  replaced a hand-written file that nothing owned.
 - **Upstream's `home/.pi/agent` layer is not ported.** Not a macOS
   incompatibility - it is upstream's own additive post-video layer for an
   opt-in CLI, and it was out of scope here. It would port cleanly if wanted.
