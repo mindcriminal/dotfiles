@@ -82,6 +82,15 @@ in
     "$HOME/.local/share/pi-node/node-v22.23.2-linux-x64/bin"
   ];
 
+  # npm's global prefix, which nothing used to own: this was a hand-written
+  # ~/.npmrc. Both PATH entries above point at ~/.npm-global/bin, and firstmate
+  # installs several of its tools with `npm install -g`. Without this, npm's
+  # prefix is the read-only Nix store copy of nodejs, so those installs fail and
+  # the bin directory on PATH stays empty.
+  home.file.".npmrc".text = ''
+    prefix=${config.home.homeDirectory}/.npm-global
+  '';
+
   programs.starship = {
     enable = true;
     settings = {

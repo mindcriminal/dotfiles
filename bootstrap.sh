@@ -84,7 +84,102 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 # <name>.backup rather than failing the switch.
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
-echo "==> Step 6: herdr agent integrations"
+echo "==> Step 6: firstmate, and the agent tooling it owns"
+# BEGIN firstmate step - tests/firstmate.test.sh extracts this block by these
+# two markers and runs it on its own, so keep it self-contained: `ask`, $HOME
+# and the shell options are the only things it may take from the rest of this
+# file.
+#
+# This repo deliberately does NOT list the agent tools themselves. firstmate
+# already owns that list, and their minimum versions, in bin/fm-bootstrap.sh;
+# a second copy here would rot the first time firstmate adds a tool or raises a
+# floor. So dotfiles' whole job is to get firstmate onto the machine, and
+# firstmate's job is to install its own tooling. tests/firstmate.test.sh keeps
+# this file honest by failing if it ever names one of them.
+FIRSTMATE_URL="${FIRSTMATE_URL:-https://github.com/kunchenguid/firstmate}"
+FIRSTMATE_DIR="${FIRSTMATE_DIR:-$HOME/github/mindcriminal/firstmate}"
+# HTTPS, not SSH, on purpose: a fresh machine has no key on GitHub yet.
+FM_BOOTSTRAP="$FIRSTMATE_DIR/bin/fm-bootstrap.sh"
+fm_consented=0   # the clone prompt also covers the install, so only ever ask once
+fm_usable=1
+
+if [ -d "$FIRSTMATE_DIR" ]; then
+  # Never pull, reset or clean it. It carries machine-local, captain-private
+  # state (data/, state/, config/, projects/, .env) that this repo must not touch.
+  echo "    firstmate already present at $FIRSTMATE_DIR, leaving it alone"
+elif ! command -v git >/dev/null 2>&1; then
+  echo "    git is not on PATH, skipping (did step 5 succeed?)"
+  fm_usable=0
+else
+  echo "    firstmate is not on this machine yet. It is the thing that knows"
+  echo "    which agent tools this machine needs, and installs them itself."
+  echo "      clone $FIRSTMATE_URL"
+  echo "         -> $FIRSTMATE_DIR"
+  if ask "Clone it, then install whatever agent tooling it reports missing?"; then
+    fm_consented=1
+    if git clone "$FIRSTMATE_URL" "$FIRSTMATE_DIR"; then
+      echo "    cloned"
+    else
+      echo "    clone failed, skipping the rest of this step"
+      fm_usable=0
+    fi
+  else
+    echo "    Skipped. Without firstmate this machine gets none of its agent tooling."
+    fm_usable=0
+  fi
+fi
+
+if [ "$fm_usable" = 1 ] && [ ! -x "$FM_BOOTSTRAP" ]; then
+  echo "    $FM_BOOTSTRAP is missing or not executable, skipping"
+  fm_usable=0
+fi
+
+if [ "$fm_usable" = 1 ]; then
+  # FM_BOOTSTRAP_DETECT_ONLY=1 is required, not a nicety: without it this run
+  # performs firstmate's mutating startup sweeps (fleet sync, secondmate
+  # liveness, backlog reconciliation), which a machine bootstrap has no
+  # business triggering.
+  if ! fm_report=$(FM_BOOTSTRAP_DETECT_ONLY=1 "$FM_BOOTSTRAP" 2>&1); then
+    echo "    firstmate's detect run failed, skipping its tooling install:"
+    printf '%s\n' "$fm_report" | sed 's/^/      /'
+  else
+    # It prints one line per problem. Only "MISSING: <tool> (install: <cmd>)"
+    # names a tool this step may install. "MISSING_MANUAL: " needs a human, and
+    # passing it to `install` fails by design; every other line (NEEDS_GH_AUTH,
+    # TANGLE:, FLEET_SYNC:, ...) is a diagnostic, not a tool.
+    fm_missing=$(printf '%s\n' "$fm_report" | sed -nE 's/^MISSING: ([^[:space:]]+).*/\1/p')
+    fm_manual=$(printf '%s\n' "$fm_report" | sed -n 's/^MISSING_MANUAL: //p')
+
+    if [ -n "$fm_manual" ]; then
+      echo "    These have no unattended install; do them by hand:"
+      printf '%s\n' "$fm_manual" | sed 's/^/      /'
+    fi
+
+    if [ -z "$fm_missing" ]; then
+      echo "    all of firstmate's agent tooling is already installed"
+    else
+      echo "    firstmate reports these missing:"
+      printf '%s\n' "$fm_missing" | sed 's/^/      /'
+      echo "    Installing them fetches from the network, and two of them pipe a"
+      echo "    remote install script straight into a shell."
+      if [ "$fm_consented" = 1 ] || ask "Let firstmate install them?"; then
+        # Unquoted on purpose: one argument per tool name.
+        # shellcheck disable=SC2086
+        if "$FM_BOOTSTRAP" install $fm_missing; then
+          echo "    installed"
+        else
+          # Never fatal: the rest of this machine is still worth finishing.
+          echo "    firstmate could not install everything; re-run ./bootstrap.sh once fixed"
+        fi
+      else
+        echo "    Skipped."
+      fi
+    fi
+  fi
+fi
+# END firstmate step
+
+echo "==> Step 7: herdr agent integrations"
 # herdr shows which agent is live in which pane by way of a small hook it
 # installs inside each agent's own config. Those hooks are generated files that
 # herdr owns - the one it writes says so at the top, and updating herdr
@@ -117,7 +212,7 @@ else
   # updates its integration, and let herdr be the one to rewrite it.
 fi
 
-echo "==> Step 7: make zsh the login shell"
+echo "==> Step 8: make zsh the login shell"
 ZSH_BIN="$HOME/.nix-profile/bin/zsh"
 if [ ! -x "$ZSH_BIN" ]; then
   echo "    $ZSH_BIN not found, skipping (did step 5 succeed?)"

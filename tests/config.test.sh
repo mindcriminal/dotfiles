@@ -7,6 +7,7 @@
 #   "three places have to match" trap the README warns about);
 # - the username in flake.nix is threaded, not duplicated per file;
 # - every mkOutOfStoreSymlink source in home.nix actually exists in the repo;
+# - npm's global prefix is declared, and agrees with the PATH entries;
 # - no macOS-only leftovers survived the translation;
 # - the herdr pin is a real SRI hash against the official Linux artifact.
 set -u
@@ -46,6 +47,22 @@ grep -q 'home.homeDirectory = "/home/''${user}"' "$ROOT/home.nix" \
 assert_not_contains "$(cat "$ROOT/home.nix")" "/home/$USER_NAME" \
   "home.nix hardcodes /home/$USER_NAME instead of using \$user"
 pass "username \"$USER_NAME\" is declared once and threaded through"
+
+# --- npm's global prefix ------------------------------------------------------
+
+# home.sessionPath and the zsh PATH both put ~/.npm-global/bin on PATH, and
+# firstmate installs several tools with `npm install -g`. If npm's prefix is not
+# declared to match, those installs write into the read-only Nix store copy of
+# nodejs and fail. It used to be a hand-written ~/.npmrc, owned by nothing.
+grep -q 'home.file.".npmrc"' "$ROOT/home.nix" \
+  || fail "home.nix does not declare ~/.npmrc; npm's global prefix would be unmanaged"
+# shellcheck disable=SC2016  # ${config...} is a Nix interpolation, not a shell one
+grep -q 'prefix=''${config.home.homeDirectory}/.npm-global' "$ROOT/home.nix" \
+  || fail "the npm prefix must be derived from config.home.homeDirectory"
+# shellcheck disable=SC2016  # $HOME here is literal text inside home.sessionPath
+grep -q '"\$HOME/.npm-global/bin"' "$ROOT/home.nix" \
+  || fail "home.sessionPath no longer matches the declared npm prefix"
+pass "npm's global prefix is declared and agrees with the ~/.npm-global/bin on PATH"
 
 # --- every symlink source exists ----------------------------------------------
 
