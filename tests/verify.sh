@@ -193,10 +193,11 @@ if command -v nvim >/dev/null 2>&1; then
     bad "mapleader is ${leader:-unreadable}" "expected \" \"; the config did not load"
   fi
 
-  if [ "$relnum" = "true" ]; then
-    ok "options applied (relativenumber)"
+  # vim_config.lua deliberately turns relativenumber off, unlike upstream.
+  if [ "$relnum" = "false" ]; then
+    ok "options applied (relativenumber is off, as vim_config.lua sets it)"
   else
-    bad "relativenumber is ${relnum:-unreadable}" "expected true"
+    bad "relativenumber is ${relnum:-unreadable}" "expected false; vim_config.lua turns it off"
   fi
 
   if [ -d "$HOME/.local/share/nvim/lazy/lazy.nvim" ]; then
