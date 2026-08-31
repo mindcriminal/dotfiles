@@ -8,6 +8,7 @@
 # - the username in flake.nix is threaded, not duplicated per file;
 # - every mkOutOfStoreSymlink source in home.nix actually exists in the repo;
 # - npm's global prefix is declared, and agrees with the PATH entries;
+# - Claude's settings.json is left unmanaged and seeded by a copy instead;
 # - no macOS-only leftovers survived the translation;
 # - the herdr pin is a real SRI hash against the official Linux artifact.
 set -u
@@ -77,6 +78,22 @@ done < <(grep -oE 'mkOutOfStoreSymlink "\$\{dotfiles\}/[^"]+"' "$ROOT/home.nix" 
          | sed -E 's/.*mkOutOfStoreSymlink "(.*)"/\1/')
 [ "$missing" -eq 0 ] || exit 1
 pass "every mkOutOfStoreSymlink source in home.nix exists in the repo"
+
+# --- ~/.claude/settings.json is Claude's, not Home Manager's -------------------
+
+# Claude Code rewrites this file itself, by writing a temp file next to the
+# *first* symlink hop and renaming it into place. Any home.file entry for the
+# path makes that first hop a read-only /nix/store directory, so every settings
+# change Claude makes fails with EACCES - mkOutOfStoreSymlink included. The repo
+# copy is a first-install seed that bootstrap.sh copies, and nothing more.
+grep -q 'home.file.".claude/settings.json"' "$ROOT/home.nix" \
+  && fail "home.nix must not manage .claude/settings.json; Claude cannot write through the store symlink"
+[ -r "$ROOT/home/.claude/settings.json" ] \
+  || fail "home/.claude/settings.json is missing; bootstrap.sh has no seed to copy"
+# shellcheck disable=SC2016  # this is bootstrap.sh's literal source text, not an expansion
+grep -q 'cp "$CLAUDE_SEED" "$CLAUDE_LIVE"' "$ROOT/bootstrap.sh" \
+  || fail "bootstrap.sh no longer copies the Claude settings seed into place"
+pass "Claude's settings.json is seeded by a copy, not managed by Home Manager"
 
 # --- the translation is complete ----------------------------------------------
 

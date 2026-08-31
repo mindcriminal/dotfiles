@@ -111,8 +111,15 @@ in
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/home/.config/nvim";
   home.file.".config/herdr".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/home/.config/herdr";
-  home.file.".claude/settings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/home/.claude/settings.json";
+  # ~/.claude/settings.json is deliberately NOT managed here. Claude Code
+  # rewrites it whenever you change a model, an effort level or the theme, and
+  # it does so by writing settings.json.tmp.<pid>.<hash> next to the *first*
+  # symlink hop before renaming it into place. That first hop is the
+  # home-manager-files store path, which is root-owned and read-only, so every
+  # such write fails with EACCES - mkOutOfStoreSymlink does not help, because
+  # the temp file never reaches the out-of-store target. home/.claude/settings.json
+  # stays in the repo as a first-install seed that bootstrap.sh *copies* into
+  # place; after that the live file is Claude's, and it is expected to drift.
 
   home.file.".claude/CLAUDE.md".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/home/AGENTS.md";

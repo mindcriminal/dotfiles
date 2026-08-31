@@ -2,7 +2,7 @@
 
 These are verbatim captures of real `bin/fm-bootstrap.sh` output, not
 hand-written samples. `tests/firstmate.test.sh` replays them so bootstrap's
-step 6 can be proven against firstmate's real line format without a fresh
+step 7 can be proven against firstmate's real line format without a fresh
 machine and without a network install.
 
 Both were recorded with firstmate's own read-only detect mode:

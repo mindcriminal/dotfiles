@@ -41,12 +41,21 @@ Deliberate decisions - do NOT silently revert them:
   Windows whether a Regular face resolves, because files-on-disk passes even
   when this is broken.
 - **The agent tools are firstmate's list, not this repo's.** `bootstrap.sh`
-  step 6 clones firstmate and asks `bin/fm-bootstrap.sh` what is missing, then
+  step 7 clones firstmate and asks `bin/fm-bootstrap.sh` what is missing, then
   installs exactly what it names. Do not add `treehouse`, `no-mistakes` or the
   `*-axi` npm globals to `home.packages` or to any list here: firstmate owns
   both the roster and the version floors, and a second copy rots. The detect run
   must keep `FM_BOOTSTRAP_DETECT_ONLY=1`, or it performs firstmate's mutating
   startup sweeps. See the README's "Agent tooling" section for the rest.
+- **`~/.claude/settings.json` is deliberately unmanaged.** Claude Code rewrites
+  it itself, writing `settings.json.tmp.<pid>.<hash>` beside the *first* symlink
+  hop before renaming it into place. Any `home.file` entry makes that first hop
+  the read-only `/nix/store` copy, so every settings change fails with EACCES -
+  `mkOutOfStoreSymlink` does not help, because the temp file never reaches the
+  out-of-store target. `home/.claude/settings.json` is a first-install seed that
+  `bootstrap.sh` step 6 *copies*, never over an existing regular file. The live
+  file is expected to drift from the seed (herdr writes its hooks block there).
+  Do not re-add it to `home.nix`; `tests/config.test.sh` fails if you do.
 - **`home.nix` declares `~/.npmrc`.** Five of those tools are `npm install -g`,
   and without a declared prefix npm writes into the read-only Nix store. This
   replaced a hand-written file that nothing owned.

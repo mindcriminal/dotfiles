@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh step 6 puts firstmate on the machine and asks it to install its
+# bootstrap.sh step 7 puts firstmate on the machine and asks it to install its
 # own agent tooling. The interesting part is the parse: firstmate prints one
 # line per problem, and only some of those lines name a tool that may be passed
 # to `fm-bootstrap.sh install`.

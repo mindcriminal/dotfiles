@@ -128,7 +128,7 @@ environment, unlike the video's `darwin-rebuild`, which writes system state.
 | `macos_window_background_blur = 50` | `win32_system_backdrop = "Acrylic"` | The Windows equivalent. Both are guarded by a platform check in the same `wezterm.lua`. |
 | Hack Nerd Font via `home.packages` | that, plus `scripts/install-nerd-font.ps1` | The Linux copy is invisible to a Windows terminal; it needs its own per-user install. |
 | his `~/.pi/agent` layer (Pi themes, extensions, models.json, settings.json) | **not ported** | See [Not ported](#not-ported). |
-| `chsh` not needed (zsh is the macOS default) | bootstrap step 8 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
+| `chsh` not needed (zsh is the macOS default) | bootstrap step 9 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
 
 The Neovim config carries over untouched: it already checks for WSL and turns on
 a transparent background there, so it was correct for this machine before the
@@ -158,13 +158,14 @@ does not work here. Note that his `settings.json` pins two third-party npm
 packages that run with your full user permissions.
 
 Everything else from upstream is present. The Neovim config, the herdr
-config and `.claude/settings.json` are byte-identical to his; the package
-list, shell aliases and starship settings match exactly.
+config and the `.claude/settings.json` seed are byte-identical to his; the
+package list, shell aliases and starship settings match exactly.
 
 ## How the WezTerm bridge works
 
-Every other config here is a `mkOutOfStoreSymlink` straight into this repo, so
-editing the file in the repo *is* editing your live config.
+Nearly every config here is a `mkOutOfStoreSymlink` straight into this repo, so
+editing the file in the repo *is* editing your live config. (The other exception
+is [Claude's settings file](#claudes-settings-file), for a different reason.)
 
 WezTerm can't work that way. It runs as a Windows program, and Windows will not
 follow a Linux symlink. A plain copy to the Windows side would work but would
@@ -237,7 +238,10 @@ programs.git = {
   They're convenient, but know what they do before you use them.
 - `bootstrap.sh` runs `home-manager switch -b backup`, so any config file Home
   Manager wants to own that already exists is renamed to `<name>.backup` rather
-  than lost. Expect `~/.claude/settings.json.backup` on a first run.
+  than lost.
+- `~/.claude/settings.json` is the one config here that is **not** managed by
+  Home Manager, and not a symlink. See
+  [Claude's settings file](#claudes-settings-file).
 
 ### Claude Code
 
@@ -249,6 +253,39 @@ copy would land earlier on `PATH`, pin an older build, and fight the updater.
 The video installs it from a Homebrew cask, where that conflict doesn't arise.
 Install or update it upstream's way and leave it out of `home.packages`.
 
+### Claude's settings file
+
+`~/.claude/settings.json` is the single config in this repo that Home Manager
+does not own, and the single one that is a real file rather than a symlink.
+
+Claude Code rewrites that file itself every time you change a model, an effort
+level or the theme. It does it atomically: it writes
+`settings.json.tmp.<pid>.<hash>` in the directory of the **first** symlink hop
+and then renames it into place. When Home Manager owns the path, that first hop
+is the read-only, root-owned `/nix/store/...-home-manager-files` directory, so
+every settings change dies with:
+
+```
+Failed to read raw settings from ~/.claude/settings.json:
+Error: EACCES: permission denied, open '/nix/store/...-home-manager-files/.claude/settings.json.tmp....'
+```
+
+`mkOutOfStoreSymlink` does not rescue it, because the temp file lands beside the
+first hop rather than beside the final target. So the entry is gone from
+`home.nix` entirely.
+
+`home/.claude/settings.json` stays in the repo as a **first-install seed**.
+Bootstrap step 6 copies it to `~/.claude/settings.json`, and only when there is
+no regular file there already - if it finds the stale symlink from an older
+generation it replaces that with the copy, and if it finds a real file it leaves
+it alone, because by then the file is yours and Claude's. Editing the repo copy
+therefore does *not* change your live settings on a machine that is already set
+up; copy it across by hand if you want it to.
+
+Expect the two to drift. `herdr integration install claude` (step 8) writes its
+`hooks` block straight into the live file, and Claude writes your own changes
+there too. That difference is normal, not damage.
+
 ### Agent tooling
 
 The agent CLIs this machine uses (`treehouse`, `no-mistakes`, and a handful of
@@ -259,7 +296,7 @@ of them and their minimum versions, in its `bin/fm-bootstrap.sh`. Listing them
 here would mean two lists, and the second one rots the first time firstmate adds
 a tool or raises a floor.
 
-So bootstrap step 6 does the smallest thing that works: clone firstmate over
+So bootstrap step 7 does the smallest thing that works: clone firstmate over
 HTTPS (no SSH key exists yet on a fresh machine), ask it what is missing with
 
 ```sh
@@ -297,7 +334,9 @@ npm never uses.
   `bootstrap.sh` after showing you a diff.
 - `scripts/` - the two Windows-boundary crossings: the WezTerm loader installer
   (run automatically on every switch) and the font installer (run by hand).
-- `home/` - the actual config files that get symlinked into place.
+- `home/` - the actual config files that get symlinked into place. The one
+  exception is `home/.claude/settings.json`, which is copied once as a seed;
+  see [Claude's settings file](#claudes-settings-file).
 - `tests/` - static invariants (`./tests/run.sh`) plus `verify.sh`, which
   checks the applied machine rather than the repo.
 
