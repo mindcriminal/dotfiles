@@ -85,29 +85,10 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
 echo "==> Step 6: seed ~/.claude/settings.json"
-# A first-install seed, copied - not symlinked. home.nix explains why at length:
-# Claude Code rewrites this file itself and cannot do so through a link into the
-# Nix store. So the repo's copy is only a starting point, and the live file is
-# Claude's from here on. Never overwrite a real file: it holds settings you
-# changed inside Claude, plus herdr's hooks block from the next-but-one step.
-CLAUDE_SEED="$DIR/home/.claude/settings.json"
-CLAUDE_LIVE="$HOME/.claude/settings.json"
-if [ -f "$CLAUDE_LIVE" ] && [ ! -L "$CLAUDE_LIVE" ]; then
-  echo "    $CLAUDE_LIVE already exists and is yours to keep, leaving it alone"
-elif [ ! -r "$CLAUDE_SEED" ]; then
-  echo "    $CLAUDE_SEED is missing, skipping"
-else
-  # A symlink here is the leftover from when home.nix managed this path. It
-  # points into the store (or at the repo), and Claude cannot write through it.
-  if [ -L "$CLAUDE_LIVE" ]; then
-    echo "    replacing the stale symlink left by an older generation"
-    rm -f "$CLAUDE_LIVE"
-  fi
-  mkdir -p "$(dirname "$CLAUDE_LIVE")"
-  cp "$CLAUDE_SEED" "$CLAUDE_LIVE"
-  chmod u+w "$CLAUDE_LIVE"
-  echo "    seeded from home/.claude/settings.json (yours to edit from now on)"
-fi
+# A first-install seed, copied - not symlinked - and never over a real file.
+# The script says why at length; rebuild.sh calls the same one after every
+# switch, because activation deletes the symlink an older generation owned.
+"$DIR/scripts/seed-claude-settings.sh"
 
 echo "==> Step 7: firstmate, and the agent tooling it owns"
 # BEGIN firstmate step - tests/firstmate.test.sh extracts this block by these

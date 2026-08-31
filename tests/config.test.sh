@@ -89,11 +89,33 @@ pass "every mkOutOfStoreSymlink source in home.nix exists in the repo"
 grep -q 'home.file.".claude/settings.json"' "$ROOT/home.nix" \
   && fail "home.nix must not manage .claude/settings.json; Claude cannot write through the store symlink"
 [ -r "$ROOT/home/.claude/settings.json" ] \
-  || fail "home/.claude/settings.json is missing; bootstrap.sh has no seed to copy"
-# shellcheck disable=SC2016  # this is bootstrap.sh's literal source text, not an expansion
-grep -q 'cp "$CLAUDE_SEED" "$CLAUDE_LIVE"' "$ROOT/bootstrap.sh" \
-  || fail "bootstrap.sh no longer copies the Claude settings seed into place"
-pass "Claude's settings.json is seeded by a copy, not managed by Home Manager"
+  || fail "home/.claude/settings.json is missing; there is no seed to copy"
+
+SEEDER=scripts/seed-claude-settings.sh
+[ -x "$ROOT/$SEEDER" ] || fail "$SEEDER is missing or not executable"
+# shellcheck disable=SC2016  # this is the seeder's literal source text, not an expansion
+grep -q 'cp "$SEED" "$LIVE"' "$ROOT/$SEEDER" \
+  || fail "$SEEDER no longer copies the seed into place"
+# The never-clobber rule is the whole safety property: a real file there is
+# Claude's, and holds settings that only exist on the machine.
+# shellcheck disable=SC2016  # also the seeder's literal source text
+grep -q '\[ -f "$LIVE" \] && \[ ! -L "$LIVE" \]' "$ROOT/$SEEDER" \
+  || fail "$SEEDER no longer refuses to overwrite an existing regular file"
+
+# Both entry points must call it, and rebuild.sh must call it AFTER the switch:
+# activation deletes the symlink a pre-change generation owned, so seeding first
+# would just watch the switch delete the copy again.
+for caller in bootstrap.sh rebuild.sh; do
+  grep -q "$SEEDER" "$ROOT/$caller" \
+    || fail "$caller does not run $SEEDER; a switch there would leave no settings file"
+done
+switch_line=$(grep -n 'home-manager switch' "$ROOT/rebuild.sh" | tail -n1 | cut -d: -f1)
+seed_line=$(grep -n "$SEEDER" "$ROOT/rebuild.sh" | tail -n1 | cut -d: -f1)
+[ "$seed_line" -gt "$switch_line" ] \
+  || fail "rebuild.sh must run $SEEDER after the switch, not before it"
+grep -q '^exec home-manager switch' "$ROOT/rebuild.sh" \
+  && fail "rebuild.sh execs the switch, so $SEEDER would never run"
+pass "Claude's settings.json is seeded by a copy from both bootstrap.sh and rebuild.sh"
 
 # --- the translation is complete ----------------------------------------------
 

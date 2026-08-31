@@ -275,16 +275,35 @@ first hop rather than beside the final target. So the entry is gone from
 `home.nix` entirely.
 
 `home/.claude/settings.json` stays in the repo as a **first-install seed**.
-Bootstrap step 6 copies it to `~/.claude/settings.json`, and only when there is
-no regular file there already - if it finds the stale symlink from an older
-generation it replaces that with the copy, and if it finds a real file it leaves
-it alone, because by then the file is yours and Claude's. Editing the repo copy
-therefore does *not* change your live settings on a machine that is already set
-up; copy it across by hand if you want it to.
+`scripts/seed-claude-settings.sh` copies it to `~/.claude/settings.json`, and
+only when there is no regular file there already - if it finds the stale symlink
+from an older generation it replaces that with the copy, and if it finds a real
+file it leaves it alone, because by then the file is yours and Claude's. Editing
+the repo copy therefore does *not* change your live settings on a machine that
+is already set up; copy it across by hand if you want it to.
 
-Expect the two to drift. `herdr integration install claude` (step 8) writes its
-`hooks` block straight into the live file, and Claude writes your own changes
-there too. That difference is normal, not damage.
+Both `bootstrap.sh` (step 6) and `rebuild.sh` run that script, always *after*
+the switch. A bare `home-manager switch` does not - use `./rebuild.sh`, which is
+what everything here assumes anyway.
+
+**Upgrading a machine set up before this change.** Your `~/.claude/settings.json`
+is still the symlink the old generation owned. Home Manager deletes a path it
+owned in the previous generation but no longer declares, so the first
+`./rebuild.sh` after this change removes that link - and then, in the same run,
+the seed script puts a real file back in its place. You end up with a writable
+copy of the repo seed, and Claude can save settings again.
+
+If your live settings had drifted from the repo copy - most likely herdr's
+`hooks` block, or anything you changed inside Claude - that drift lived only in
+the symlink target, which is this repo's file, so it is still in the repo and
+gets copied across with everything else. Any *later* rebuild is a no-op here:
+the seed script sees a regular file and leaves it alone, and Home Manager
+declines to delete a path that does not link into one of its generations. If you
+want to be careful, `cp ~/.claude/settings.json ~/claude-settings.bak` first.
+
+Expect the two to drift from then on. `herdr integration install claude`
+(bootstrap step 8) writes its `hooks` block straight into the live file, and
+Claude writes your own changes there too. That difference is normal, not damage.
 
 ### Agent tooling
 
@@ -332,8 +351,10 @@ npm never uses.
   from Homebrew.
 - `system/wsl.conf` - intended contents of `/etc/wsl.conf`, applied by
   `bootstrap.sh` after showing you a diff.
-- `scripts/` - the two Windows-boundary crossings: the WezTerm loader installer
-  (run automatically on every switch) and the font installer (run by hand).
+- `scripts/` - the two Windows-boundary crossings (the WezTerm loader installer,
+  run automatically on every switch, and the font installer, run by hand), plus
+  `seed-claude-settings.sh`, which both `bootstrap.sh` and `rebuild.sh` run
+  after the switch.
 - `home/` - the actual config files that get symlinked into place. The one
   exception is `home/.claude/settings.json`, which is copied once as a seed;
   see [Claude's settings file](#claudes-settings-file).

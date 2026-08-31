@@ -53,9 +53,13 @@ Deliberate decisions - do NOT silently revert them:
   the read-only `/nix/store` copy, so every settings change fails with EACCES -
   `mkOutOfStoreSymlink` does not help, because the temp file never reaches the
   out-of-store target. `home/.claude/settings.json` is a first-install seed that
-  `bootstrap.sh` step 6 *copies*, never over an existing regular file. The live
-  file is expected to drift from the seed (herdr writes its hooks block there).
-  Do not re-add it to `home.nix`; `tests/config.test.sh` fails if you do.
+  `scripts/seed-claude-settings.sh` *copies*, never over an existing regular
+  file. Both `bootstrap.sh` (step 6) and `rebuild.sh` run it, and both run it
+  *after* the switch: activation deletes a path the previous generation owned
+  and the new one does not declare, so seeding first would just watch the switch
+  delete the copy. The live file is expected to drift from the seed (herdr
+  writes its hooks block there). Do not re-add it to `home.nix`, and do not put
+  the `exec` back on rebuild.sh's switch; `tests/config.test.sh` fails on both.
 - **`home.nix` declares `~/.npmrc`.** Five of those tools are `npm install -g`,
   and without a declared prefix npm writes into the read-only Nix store. This
   replaced a hand-written file that nothing owned.
