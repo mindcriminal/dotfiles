@@ -19,6 +19,8 @@ Running the switch builds:
 - Terminal (WezTerm config with the rose-pine moon theme and dimmed unfocused
   windows, installed across the WSL/Windows boundary)
 - Agent configs (Claude, Codex, opencode all share one AGENTS.md)
+- Dictation settings for Handy, seeded across the same WSL/Windows boundary
+  (see [How dictation is set up](#how-dictation-is-set-up))
 - Agent tooling, by way of firstmate, which owns the list of tools rather than
   this repo (see [Agent tooling](#agent-tooling))
 - Host settings for WSL itself (`/etc/wsl.conf`), applied only after you see the diff
@@ -26,7 +28,7 @@ Running the switch builds:
 ## Prerequisites
 
 - WSL2 with a systemd-enabled distro. Built and tested on Rocky Linux 10, x86_64.
-- Windows 10 or 11 on the other side, for the terminal.
+- Windows 10 or 11 on the other side, for the terminal and for dictation.
 - Another distro or a non-Rocky WSL install works: nothing here is Rocky-specific
   beyond `system/wsl.conf`, but see [Make it yours](#make-it-yours).
 
@@ -69,12 +71,17 @@ Before you run it: review [Make it yours](#make-it-yours).
 8. Offers to make the Nix zsh your login shell (adding it to `/etc/shells` first,
    since `chsh` refuses shells that aren't listed).
 
-Two steps stay manual, because they run on the Windows side:
+Three steps stay manual, because they run on the Windows side:
 
 ```powershell
 winget install wez.wezterm
 powershell -ExecutionPolicy Bypass -File .\scripts\install-nerd-font.ps1
+winget install cjpais.Handy
 ```
+
+Launch Handy once so it can download its model, then quit it and run
+`./rebuild.sh` to seed its settings - see
+[How dictation is set up](#how-dictation-is-set-up).
 
 ### Validate without applying
 
@@ -128,6 +135,7 @@ environment, unlike the video's `darwin-rebuild`, which writes system state.
 | `macos_window_background_blur = 50` | `win32_system_backdrop = "Acrylic"` | The Windows equivalent. Both are guarded by a platform check in the same `wezterm.lua`. |
 | Hack Nerd Font via `home.packages` | that, plus `scripts/install-nerd-font.ps1` | The Linux copy is invisible to a Windows terminal; it needs its own per-user install. |
 | his `~/.pi/agent` layer (Pi themes, extensions, models.json, settings.json) | **not ported** | See [Not ported](#not-ported). |
+| no dictation | Handy, installed Windows-side, settings seeded | Not a translation of anything upstream - an addition. See [How dictation is set up](#how-dictation-is-set-up). |
 | `chsh` not needed (zsh is the macOS default) | bootstrap step 9 | zsh is not the default shell on Rocky and is not in `/etc/shells` until Nix's copy is added. |
 
 The Neovim config carries over untouched: it already checks for WSL and turns on
@@ -198,6 +206,83 @@ into this distro instead of PowerShell.
 **Gotcha:** WezTerm checks `%USERPROFILE%\.wezterm.lua` *before*
 `.config\wezterm\wezterm.lua`. If you have a stray one there it silently wins;
 the installer warns you when it sees it.
+
+## How dictation is set up
+
+Dictation is [Handy](https://github.com/cjpais/Handy): hold a hotkey, talk, and
+a local Whisper model types what you said into whatever has focus.
+
+**It is a Windows app, and it has to be.** Handy needs a global hotkey and has
+to type into the focused *Windows* window. A process inside the distro can do
+neither, so there is no WSL-side install to prefer - this is the same boundary
+the [WezTerm bridge](#how-the-wezterm-bridge-works) crosses, and it is handled
+the same way: this repo does not automate the install, it tells you the command
+and then checks that you ran it.
+
+```powershell
+winget install cjpais.Handy
+```
+
+winget pulls the Vulkan runtime it needs as a dependency. Launch Handy once and
+let it download the Whisper `turbo` model (`ggml-large-v3-turbo.bin`, ~1.5GB).
+That download is **not** in this repo and never will be: a gigabyte and a half
+of weights does not belong in a dotfiles checkout, and Handy already knows how
+to fetch and verify it. If you would rather not wait on the UI, the same file
+is at `https://blob.handy.computer/ggml-large-v3-turbo.bin`
+(sha256 `1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69`),
+dropped into `%APPDATA%\com.pais.handy\models\`.
+
+Then quit Handy and run `./rebuild.sh`. `scripts/seed-handy-settings.sh` seeds
+three settings into `%APPDATA%\com.pais.handy\settings_store.json`:
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `paste_method` | `direct` | The one that is not a preference. See below. |
+| `selected_model` | `turbo` | Whisper large-v3-turbo, the model above. |
+| `autostart_enabled` | `true` | Dictation is there after a reboot without being started by hand. |
+
+### Why `paste_method` has to be `direct`
+
+Handy's default pastes by putting the transcript on the Windows clipboard,
+sending Ctrl+V, and restoring your previous clipboard on a timer. WezTerm
+queues that paste through its own event loop and reads the clipboard *after*
+the restore has already fired - so it pastes whatever you had copied before
+instead of your words. That is upstream
+[Handy issue #502](https://github.com/cjpais/Handy/issues/502).
+
+Neither clipboard-based mitigation holds. A longer `paste_delay_after_ms` just
+loses to any lag. The receipt-based `reliable_paste` path settled on a foreign
+process that read the clipboard a millisecond after the chord and restored
+early. `direct` types the characters and never touches the clipboard at all,
+which removes the race rather than racing it - which is also why
+`home/.config/wezterm/wezterm.lua` needs no change for any of this.
+
+WezTerm is this machine's terminal, so at the default this is broken in the one
+window it gets used in most. `./tests/verify.sh` checks the live value and
+fails if it is anything else.
+
+### How the seeding behaves
+
+Same lesson as [Claude's settings file](#claudes-settings-file), for the same
+reason: Handy rewrites `settings_store.json` itself, on every settings change
+and again at shutdown, so Home Manager must not own it. The seeder is therefore
+careful:
+
+- it only writes a key that is still at **Handy's own default**. Anything else
+  you set in Handy's UI is yours; it says so and moves on.
+- it refuses to write while Handy is **running**, because Handy would serialize
+  its in-memory settings over the file at exit and silently undo the change. It
+  tells you to quit Handy and re-run.
+- it backs the file up before its first write, and leaves a store it cannot
+  parse strictly alone.
+- it **no-ops with a message, never an error**, when Handy is not installed or
+  Windows is unreachable. A machine with no Handy still builds, switches and
+  tests clean.
+
+`scripts/seed-handy-settings.sh --dry-run` reports what it would change.
+`--apply <file>` prints the seeded JSON for a store on stdout and writes
+nothing, which is how `tests/handy.test.sh` exercises the real merge rules
+against a recorded Handy store.
 
 ## Make it yours
 
@@ -351,13 +436,15 @@ npm never uses.
   from Homebrew.
 - `system/wsl.conf` - intended contents of `/etc/wsl.conf`, applied by
   `bootstrap.sh` after showing you a diff.
-- `scripts/` - the two Windows-boundary crossings (the WezTerm loader installer,
+- `scripts/` - the Windows-boundary crossings (the WezTerm loader installer,
   run automatically on every switch, and the font installer, run by hand), plus
-  `seed-claude-settings.sh`, which both `bootstrap.sh` and `rebuild.sh` run
-  after the switch.
+  the two seeders - `seed-claude-settings.sh` and `seed-handy-settings.sh` -
+  which both `bootstrap.sh` and `rebuild.sh` run after the switch.
 - `home/` - the actual config files that get symlinked into place. The one
   exception is `home/.claude/settings.json`, which is copied once as a seed;
-  see [Claude's settings file](#claudes-settings-file).
+  see [Claude's settings file](#claudes-settings-file). Handy's settings are
+  not a file here at all - the seeder writes three keys into the store Handy
+  owns on the Windows side.
 - `tests/` - static invariants (`./tests/run.sh`) plus `verify.sh`, which
   checks the applied machine rather than the repo.
 

@@ -377,6 +377,35 @@ else
   else
     skip "WezTerm is not installed on Windows" "winget install wez.wezterm"
   fi
+
+  # Handy, the dictation app. Windows-side for the same reason WezTerm is: it
+  # needs a global hotkey and has to type into the focused Windows window.
+  # winget's per-user install lands in %LOCALAPPDATA%\Handy; a machine-scope
+  # one lands in Program Files.
+  if [ -x "$WIN_HOME/AppData/Local/Handy/handy.exe" ] \
+    || [ -x "/mnt/c/Program Files/Handy/handy.exe" ]; then
+    ok "Handy is installed on Windows"
+
+    # Being installed is not the point; being configured is. paste_method must
+    # be "direct" or dictation into WezTerm pastes your old clipboard instead
+    # of your words - see scripts/seed-handy-settings.sh for the whole story.
+    HANDY_SETTINGS="$(wslpath -u "$(cd /mnt/c && /mnt/c/Windows/System32/cmd.exe /d /c 'echo %APPDATA%' 2>/dev/null | tr -d '\r\n')" 2>/dev/null)/com.pais.handy/settings_store.json"
+    if [ ! -s "$HANDY_SETTINGS" ]; then
+      skip "Handy has no settings file yet" "launch Handy once, quit it, then run ./rebuild.sh"
+    elif ! command -v jq >/dev/null 2>&1; then
+      skip "jq is not on PATH" "cannot read Handy's settings"
+    else
+      handy_paste=$(jq -r '.settings.paste_method // "unset"' "$HANDY_SETTINGS" 2>/dev/null || echo unreadable)
+      case "$handy_paste" in
+        direct) ok "Handy pastes by typing (paste_method=direct), so WezTerm cannot lose the race" ;;
+        unreadable) bad "could not read $HANDY_SETTINGS" "it is not valid JSON" ;;
+        *) bad "Handy's paste_method is \"$handy_paste\", not \"direct\"" \
+               "dictation into WezTerm will paste your old clipboard; quit Handy and run ./rebuild.sh" ;;
+      esac
+    fi
+  else
+    skip "Handy is not installed on Windows" "winget install cjpais.Handy"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -397,7 +426,7 @@ printf '  %d passed, %d failed, %d skipped\n' "$PASS" "$FAIL" "$SKIP"
 if [ "$FAIL" -eq 0 ]; then
   cat <<'MSG'
 
-Everything checkable from a script is in order. Four things still need eyes,
+Everything checkable from a script is in order. Five things still need eyes,
 because no script can see them:
 
   1. Open WezTerm on Windows. It should land in a WSL shell, not PowerShell.
@@ -406,6 +435,9 @@ because no script can see them:
   3. The window should be translucent, and dim when you focus another window.
   4. Open nvim. Colours should be rose-pine moon; press space then wait for the
      which-key popup; <leader>f should open a file picker.
+  5. In WezTerm, copy something, then hold Ctrl+Space and dictate a sentence.
+     Your words should appear - if what you copied appears instead, Handy is
+     back on a clipboard paste; see How dictation is set up in the README.
 
 Then prove edit-in-place: change font_size in
 home/.config/wezterm/wezterm.lua, press Ctrl+Shift+R in WezTerm, and watch it

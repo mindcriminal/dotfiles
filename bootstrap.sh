@@ -84,11 +84,15 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 # <name>.backup rather than failing the switch.
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
-echo "==> Step 6: seed ~/.claude/settings.json"
+echo "==> Step 6: seed the settings files their own apps rewrite"
 # A first-install seed, copied - not symlinked - and never over a real file.
 # The script says why at length; rebuild.sh calls the same one after every
 # switch, because activation deletes the symlink an older generation owned.
 "$DIR/scripts/seed-claude-settings.sh"
+# Handy's settings_store.json is the same shape of problem on the Windows side:
+# the app rewrites it itself, so it is seeded rather than owned. No-ops with a
+# message when Handy is not installed or Windows is out of reach.
+"$DIR/scripts/seed-handy-settings.sh"
 
 echo "==> Step 7: firstmate, and the agent tooling it owns"
 # BEGIN firstmate step - tests/firstmate.test.sh extracts this block by these
@@ -247,7 +251,12 @@ fi
 
 echo
 echo "==> Done."
-echo "    Remaining manual steps, both on the Windows side:"
+echo "    Remaining manual steps, all on the Windows side:"
 echo "      1. Install WezTerm:  winget install wez.wezterm"
 echo "      2. Install Hack Nerd Font: see scripts/install-nerd-font.ps1"
+echo "      3. Install Handy (dictation): winget install cjpais.Handy"
+echo "         Handy has to be a Windows app - it needs a global hotkey and has"
+echo "         to type into the focused Windows window, and a WSL process can do"
+echo "         neither. Launch it once, let it fetch the Whisper turbo model,"
+echo "         quit it, then run ./rebuild.sh to seed its settings."
 echo "    Then use ./rebuild.sh for every future change."

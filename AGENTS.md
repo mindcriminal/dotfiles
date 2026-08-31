@@ -63,6 +63,17 @@ Deliberate decisions - do NOT silently revert them:
 - **`home.nix` declares `~/.npmrc`.** Five of those tools are `npm install -g`,
   and without a declared prefix npm writes into the read-only Nix store. This
   replaced a hand-written file that nothing owned.
+- **Handy's `settings_store.json` is seeded per key, never owned.** Handy is
+  the dictation app, and it is a *Windows* program by necessity (global hotkey,
+  types into the focused Windows window). Installing it stays a manual
+  `winget install cjpais.Handy`, the same convention WezTerm follows.
+  `scripts/seed-handy-settings.sh` writes three keys into the store Handy owns
+  under `%APPDATA%\com.pais.handy`, and only where the live value is still
+  Handy's own default. `paste_method` must stay `direct`: the clipboard paste
+  races WezTerm's event loop and pastes your previous clipboard instead of your
+  words (upstream Handy #502). The script says all of this at length; the
+  README's "How dictation is set up" is the user-facing half. Do not add the
+  1.5GB Whisper model to this repo - Handy fetches it.
 - **Upstream's `home/.pi/agent` layer is not ported.** Not a macOS
   incompatibility - it is upstream's own additive post-video layer for an
   opt-in CLI, and it was out of scope here. It would port cleanly if wanted.
