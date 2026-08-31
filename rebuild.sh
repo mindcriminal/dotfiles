@@ -12,3 +12,10 @@ home-manager switch -b backup --flake ~/.dotfiles#wsl
 # owned - so on the first rebuild after that change this is what puts a real
 # file back. It never overwrites one that is already there.
 "$DIR/scripts/seed-claude-settings.sh"
+
+# Handy's settings_store.json, on the Windows side, for the same reason: Handy
+# rewrites it itself, so this repo seeds it rather than owning it. Nothing
+# forces this one to run after the switch - Home Manager has never owned a path
+# over there - but the two seeds belong together. Silent no-op when Handy is
+# not installed or Windows is unreachable.
+"$DIR/scripts/seed-handy-settings.sh"
