@@ -84,7 +84,13 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 # <name>.backup rather than failing the switch.
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
-echo "==> Step 6: firstmate, and the agent tooling it owns"
+echo "==> Step 6: seed ~/.claude/settings.json"
+# A first-install seed, copied - not symlinked - and never over a real file.
+# The script says why at length; rebuild.sh calls the same one after every
+# switch, because activation deletes the symlink an older generation owned.
+"$DIR/scripts/seed-claude-settings.sh"
+
+echo "==> Step 7: firstmate, and the agent tooling it owns"
 # BEGIN firstmate step - tests/firstmate.test.sh extracts this block by these
 # two markers and runs it on its own, so keep it self-contained: `ask`, $HOME
 # and the shell options are the only things it may take from the rest of this
@@ -179,7 +185,7 @@ if [ "$fm_usable" = 1 ]; then
 fi
 # END firstmate step
 
-echo "==> Step 7: herdr agent integrations"
+echo "==> Step 8: herdr agent integrations"
 # herdr shows which agent is live in which pane by way of a small hook it
 # installs inside each agent's own config. Those hooks are generated files that
 # herdr owns - the one it writes says so at the top, and updating herdr
@@ -206,13 +212,15 @@ else
       printf '%s\n' "$herdr_out" | sed 's/^/      /'
     fi
   done
-  # Claude reads its hook registration from ~/.claude/settings.json, which is
-  # this repo's file through the symlink in home.nix. So the "hooks" block there
-  # is herdr's output, not hand-written config: expect it to change when herdr
-  # updates its integration, and let herdr be the one to rewrite it.
+  # Claude reads its hook registration from ~/.claude/settings.json. That file
+  # is not managed by home.nix and is not this repo's file: step 6 only seeds it
+  # once, and `herdr integration install claude` writes its "hooks" block
+  # straight into the live copy. So the repo's home/.claude/settings.json is
+  # expected to drift from what is actually on the machine - do not treat the
+  # difference as damage, and let herdr be the one to rewrite those hooks.
 fi
 
-echo "==> Step 8: make zsh the login shell"
+echo "==> Step 9: make zsh the login shell"
 ZSH_BIN="$HOME/.nix-profile/bin/zsh"
 if [ ! -x "$ZSH_BIN" ]; then
   echo "    $ZSH_BIN not found, skipping (did step 5 succeed?)"

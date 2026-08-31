@@ -88,7 +88,7 @@ else
 fi
 
 # herdr can only report an agent's state if that agent's integration hook is
-# installed, which bootstrap step 7 does. Ask herdr instead of looking for files:
+# installed, which bootstrap step 8 does. Ask herdr instead of looking for files:
 # it owns those paths and they differ per agent.
 if command -v herdr >/dev/null 2>&1; then
   herdr_status=$(herdr integration status 2>/dev/null || true)
@@ -109,15 +109,30 @@ if command -v herdr >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-section "3. Edit-in-place symlinks"
+section "3. Edit-in-place symlinks, and the one file that must not be one"
 
 links_into_repo "$HOME/.config/nvim"                "$ROOT/home/.config/nvim"
 links_into_repo "$HOME/.config/wezterm"             "$ROOT/home/.config/wezterm"
 links_into_repo "$HOME/.config/herdr"               "$ROOT/home/.config/herdr"
-links_into_repo "$HOME/.claude/settings.json"       "$ROOT/home/.claude/settings.json"
 links_into_repo "$HOME/.claude/CLAUDE.md"           "$ROOT/home/AGENTS.md"
 links_into_repo "$HOME/.codex/AGENTS.md"            "$ROOT/home/AGENTS.md"
 links_into_repo "$HOME/.config/opencode/AGENTS.md"  "$ROOT/home/AGENTS.md"
+
+# ~/.claude/settings.json is the exception: it must NOT be a link. Claude Code
+# rewrites it in place, and it cannot write through a link into the Nix store -
+# see the comment in home.nix. bootstrap step 6 copies the repo's seed there
+# once, and the live file drifts from that seed on purpose.
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+if [ -L "$CLAUDE_SETTINGS" ]; then
+  bad "$CLAUDE_SETTINGS is a symlink" \
+      "Claude cannot write settings through it; re-run ./bootstrap.sh to replace it with a copy"
+elif [ ! -f "$CLAUDE_SETTINGS" ]; then
+  bad "$CLAUDE_SETTINGS does not exist" "run ./bootstrap.sh to seed it"
+elif [ ! -w "$CLAUDE_SETTINGS" ]; then
+  bad "$CLAUDE_SETTINGS is not writable" "Claude rewrites this file itself"
+else
+  ok "$CLAUDE_SETTINGS is a writable regular file, not managed by Home Manager"
+fi
 
 # The whole point of mkOutOfStoreSymlink: a file read through ~ is the repo file.
 if [ -r "$HOME/.config/nvim/init.lua" ] \
@@ -130,7 +145,7 @@ fi
 # ---------------------------------------------------------------------------
 section "4. firstmate and the agent tooling it owns"
 
-# bootstrap step 6 clones firstmate and asks it to install its own tooling. This
+# bootstrap step 7 clones firstmate and asks it to install its own tooling. This
 # repo never lists those tools, so the only honest check is to ask firstmate
 # whether anything is still missing.
 FIRSTMATE_DIR="${FIRSTMATE_DIR:-$HOME/github/mindcriminal/firstmate}"
@@ -199,7 +214,7 @@ section "5. Shell"
 login_shell=$(getent passwd "$(id -un)" | cut -d: -f7)
 case "$login_shell" in
   *zsh) ok "login shell is zsh ($login_shell)" ;;
-  *) skip "login shell is $login_shell" "bootstrap step 8 offers to change this" ;;
+  *) skip "login shell is $login_shell" "bootstrap step 9 offers to change this" ;;
 esac
 
 if [ -L "$HOME/.zshrc" ] && [ -e "$HOME/.zshrc" ]; then
