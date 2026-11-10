@@ -120,14 +120,14 @@ links_into_repo "$HOME/.config/opencode/AGENTS.md"  "$ROOT/home/AGENTS.md"
 
 # ~/.claude/settings.json is the exception: it must NOT be a link. Claude Code
 # rewrites it in place, and it cannot write through a link into the Nix store -
-# see the comment in home.nix. bootstrap step 6 copies the repo's seed there
-# once, and the live file drifts from that seed on purpose.
+# see the README's "Claude's settings file". Nothing puts it in place
+# automatically; the repo's home/.claude/settings.json is a reference copy.
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 if [ -L "$CLAUDE_SETTINGS" ]; then
   bad "$CLAUDE_SETTINGS is a symlink" \
-      "Claude cannot write settings through it; re-run ./bootstrap.sh to replace it with a copy"
+      "Claude cannot write settings through it; replace it with a copy of home/.claude/settings.json"
 elif [ ! -f "$CLAUDE_SETTINGS" ]; then
-  bad "$CLAUDE_SETTINGS does not exist" "run ./bootstrap.sh to seed it"
+  bad "$CLAUDE_SETTINGS does not exist" "copy home/.claude/settings.json there"
 elif [ ! -w "$CLAUDE_SETTINGS" ]; then
   bad "$CLAUDE_SETTINGS is not writable" "Claude rewrites this file itself"
 else

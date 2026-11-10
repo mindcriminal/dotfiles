@@ -138,9 +138,9 @@ for caller in bootstrap.sh rebuild.sh; do
   grep -q "$REL" "$ROOT/$caller" \
     || fail "$caller does not run $REL; a fresh machine would get Handy's defaults"
 done
-# Run after the switch, next to seed-claude-settings.sh. Nothing forces this
-# one to come after - Home Manager has never owned a path on the Windows side -
-# but keeping the two seeds together is the point.
+# Run after the switch. Nothing forces this one to come after - Home Manager
+# has never owned a path on the Windows side - but it is where post-switch
+# steps live.
 switch_line=$(grep -n 'home-manager switch' "$ROOT/rebuild.sh" | tail -n1 | cut -d: -f1)
 seed_line=$(grep -n "$REL" "$ROOT/rebuild.sh" | tail -n1 | cut -d: -f1)
 [ "$seed_line" -gt "$switch_line" ] \

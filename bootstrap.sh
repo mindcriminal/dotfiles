@@ -85,12 +85,8 @@ echo "==> Step 5: first home-manager switch (pinned to release-26.05)"
 nix run "$HM_REF" -- switch -b backup --flake "$HOME/.dotfiles#$HOST"
 
 echo "==> Step 6: seed the settings files their own apps rewrite"
-# A first-install seed, copied - not symlinked - and never over a real file.
-# The script says why at length; rebuild.sh calls the same one after every
-# switch, because activation deletes the symlink an older generation owned.
-"$DIR/scripts/seed-claude-settings.sh"
-# Handy's settings_store.json is the same shape of problem on the Windows side:
-# the app rewrites it itself, so it is seeded rather than owned. No-ops with a
+# Handy's settings_store.json: the app rewrites it itself, so it is seeded
+# rather than owned. No-ops with a
 # message when Handy is not installed or Windows is out of reach.
 "$DIR/scripts/seed-handy-settings.sh"
 
@@ -217,9 +213,9 @@ else
     fi
   done
   # Claude reads its hook registration from ~/.claude/settings.json. That file
-  # is not managed by home.nix and is not this repo's file: step 6 only seeds it
-  # once, and `herdr integration install claude` writes its "hooks" block
-  # straight into the live copy. So the repo's home/.claude/settings.json is
+  # is not managed by home.nix and is not this repo's file, and
+  # `herdr integration install claude` writes its "hooks" block straight into
+  # the live copy. So the repo's home/.claude/settings.json is
   # expected to drift from what is actually on the machine - do not treat the
   # difference as damage, and let herdr be the one to rewrite those hooks.
 fi
