@@ -25,6 +25,10 @@ in
     nerd-fonts.hack
     nodejs_22
     gh
+    # pg_dump/psql 17 for Postgres 17 servers (Supabase); Rocky's dnf one is 16
+    # and pg_dump refuses newer servers. Only the client tools are used - the
+    # package ships server binaries too, but nothing here starts one.
+    postgresql_17
   ];
   # The standalone counterpart of darwin-rebuild existing after the first
   # switch: this puts the `home-manager` command on PATH for rebuild.sh.
