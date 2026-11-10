@@ -359,32 +359,15 @@ Error: EACCES: permission denied, open '/nix/store/...-home-manager-files/.claud
 first hop rather than beside the final target. So the entry is gone from
 `home.nix` entirely.
 
-`home/.claude/settings.json` stays in the repo as a **first-install seed**.
-`scripts/seed-claude-settings.sh` copies it to `~/.claude/settings.json`, and
-only when there is no regular file there already - if it finds the stale symlink
-from an older generation it replaces that with the copy, and if it finds a real
-file it leaves it alone, because by then the file is yours and Claude's. Editing
-the repo copy therefore does *not* change your live settings on a machine that
-is already set up; copy it across by hand if you want it to.
-
-Both `bootstrap.sh` (step 6) and `rebuild.sh` run that script, always *after*
-the switch. A bare `home-manager switch` does not - use `./rebuild.sh`, which is
-what everything here assumes anyway.
+`home/.claude/settings.json` stays in the repo as a **reference copy** only.
+Nothing copies it into place automatically; on a fresh machine, copy it to
+`~/.claude/settings.json` by hand if you want it. After that the live file is
+yours and Claude's, and editing the repo copy does not change it.
 
 **Upgrading a machine set up before this change.** Your `~/.claude/settings.json`
-is still the symlink the old generation owned. Home Manager deletes a path it
-owned in the previous generation but no longer declares, so the first
-`./rebuild.sh` after this change removes that link - and then, in the same run,
-the seed script puts a real file back in its place. You end up with a writable
-copy of the repo seed, and Claude can save settings again.
-
-If your live settings had drifted from the repo copy - most likely herdr's
-`hooks` block, or anything you changed inside Claude - that drift lived only in
-the symlink target, which is this repo's file, so it is still in the repo and
-gets copied across with everything else. Any *later* rebuild is a no-op here:
-the seed script sees a regular file and leaves it alone, and Home Manager
-declines to delete a path that does not link into one of its generations. If you
-want to be careful, `cp ~/.claude/settings.json ~/claude-settings.bak` first.
+may still be the symlink an old generation owned. Home Manager deletes it on the
+next switch, so copy it to a regular file first:
+`cp --remove-destination "$(readlink -f ~/.claude/settings.json)" ~/.claude/settings.json`.
 
 Expect the two to drift from then on. `herdr integration install claude`
 (bootstrap step 8) writes its `hooks` block straight into the live file, and
@@ -438,10 +421,10 @@ npm never uses.
   `bootstrap.sh` after showing you a diff.
 - `scripts/` - the Windows-boundary crossings (the WezTerm loader installer,
   run automatically on every switch, and the font installer, run by hand), plus
-  the two seeders - `seed-claude-settings.sh` and `seed-handy-settings.sh` -
-  which both `bootstrap.sh` and `rebuild.sh` run after the switch.
+  the Handy seeder, `seed-handy-settings.sh`, which both `bootstrap.sh` and
+  `rebuild.sh` run after the switch.
 - `home/` - the actual config files that get symlinked into place. The one
-  exception is `home/.claude/settings.json`, which is copied once as a seed;
+  exception is `home/.claude/settings.json`, a reference copy that is not linked;
   see [Claude's settings file](#claudes-settings-file). Handy's settings are
   not a file here at all - the seeder writes three keys into the store Handy
   owns on the Windows side.

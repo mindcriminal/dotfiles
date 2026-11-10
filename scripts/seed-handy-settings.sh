@@ -26,12 +26,9 @@
 # its default (src-tauri/src/settings.rs, "a partial store can never fail the
 # whole load"). That is what makes a three-key seed safe on a fresh install.
 #
-# Run by bootstrap.sh and by rebuild.sh, after the switch - the same place
-# seed-claude-settings.sh runs. That script *has* to run after the switch
-# because activation deletes the symlink an older generation owned; this one
-# has no such constraint, since Home Manager has never owned a path on the
-# Windows side. It runs there for consistency, and so that both seeds are in
-# one place.
+# Run by bootstrap.sh and by rebuild.sh, after the switch. Nothing forces that
+# order - Home Manager has never owned a path on the Windows side - it is just
+# where the post-switch steps live.
 #
 #   scripts/seed-handy-settings.sh
 #   scripts/seed-handy-settings.sh --dry-run     report what would change, write nothing
